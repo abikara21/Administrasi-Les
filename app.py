@@ -201,9 +201,10 @@ elif role == "📝 Form Pendaftaran Mandiri (Public)":
     with st.form("form_pendaftaran_public"):
         reg_nama = st.text_input("Nama Lengkap Calon Siswa *")
         reg_wa = st.text_input("Nomor WhatsApp Aktif (Contoh: 6281234567890) *", value="6281234567890")
-        reg_kelas = st.selectbox("Program Les yang Diminati *", ["General Speaking - A", "IELTS Prep - B", "Private Conversation", "Kids English"])
+        reg_kelas = st.selectbox("Program Les *", ["Reguler", "Publik"])
         reg_tipe = st.selectbox("Tipe Pembelajaran Utama *", ["Les Online", "Tatap Muka", "Privat Rumah"])
-        reg_jadwal = st.multiselect("Pilihan Hari & Waktu yang Diinginkan:", ["Senin & Rabu (16:00 WIB)", "Selasa & Kamis (16:00 WIB)", "Sabtu (09:00 WIB)", "Fleksibel (Privat)"], default=["Senin & Rabu (16:00 WIB)"])
+        reg_hari = st.multiselect("Pilihan Hari yang Diinginkan *", ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"], default=["Senin"])
+        reg_waktu = st.text_input("Waktu / Jam yang Diinginkan (Ketik Manual) *", placeholder="Contoh: 16:00 WIB / Jam 4 Sore")
         reg_alamat = st.text_area("Alamat Lengkap (Wajib Diisi jika Memilih Privat Rumah):", placeholder="Jl. Anggrek No. 15, Jakarta...")
 
         btn_reg_submit = st.form_submit_button("📋 Kirim Pendaftaran Baru")
@@ -226,7 +227,8 @@ elif role == "📝 Form Pendaftaran Mandiri (Public)":
                     <h4>🎟️ Bukti Pendaftaran Siswa Baru</h4>
                     <b>ID Registrasi:</b> {new_reg_id}<br/>
                     <b>Nama Siswa:</b> {reg_nama}<br/>
-                    <b>Program:</b> {reg_kelas} ({reg_tipe})<br/>
+                    <b>Program Les:</b> {reg_kelas} ({reg_tipe})<br/>
+                    <b>Hari & Waktu:</b> {", ".join(reg_hari) if reg_hari else "Belum dipilih"} ({reg_waktu})<br/>
                     <b>No WA:</b> {reg_wa}<br/>
                     <b>Status:</b> Terdaftar di Sistem<br/>
                     <small>Tim admin kami akan segera menghubungi nomor WhatsApp Anda untuk konfirmasi jadwal & pembayaran.</small>
@@ -322,7 +324,7 @@ elif role == "👨‍🏫 Mode Guru / Tutor (🔒 PIN Required)":
             with st.form("form_jurnal_guru"):
                 p_ke = st.number_input("Pertemuan Ke-", min_value=1, value=len(st.session_state['jurnal_mengajar']) + 1)
                 tgl_j = st.date_input("Tanggal Pertemuan", datetime.date.today())
-                kls_j = st.selectbox("Kelas Target", ["General Speaking - A", "IELTS Prep - B", "Private Conversation", "Kids English"])
+                kls_j = st.selectbox("Kelas Target", ["Reguler", "Publik"])
                 mds_j = st.selectbox("Modus Kelas", ["Privat Rumah", "Tatap Muka", "Les Online"])
                 pengajar_n = st.text_input("Nama Pengajar / Tutor", value="Miss Sarah")
                 topik_m = st.text_input("Topik Bahasa Inggris Hari Ini", placeholder="Contoh: Phrasal Verbs & Speaking Practice")
@@ -371,7 +373,7 @@ elif role == "👨‍🏫 Mode Guru / Tutor (🔒 PIN Required)":
             st.subheader("📌 Terbitkan Tugas Baru")
             with st.form("form_tugas_guru"):
                 t_judul = st.text_input("Judul Tugas", placeholder="Contoh: Record Speaking Audio 2 Menit")
-                t_kelas = st.selectbox("Untuk Kelas", ["General Speaking - A", "IELTS Prep - B", "Private Conversation", "Kids English"])
+                t_kelas = st.selectbox("Untuk Kelas", ["Reguler", "Publik"])
                 t_dl = st.date_input("Deadline", datetime.date.today() + datetime.timedelta(days=7))
                 t_inst = st.text_area("Instruksi Tugas Mandiri")
 
@@ -514,7 +516,7 @@ elif role == "👑 Mode Admin / Pemilik Les (🔒 PIN Required)":
                     s_id = f"S0{len(st.session_state['data_siswa'])+1}"
                     s_n = st.text_input("Nama Siswa Baru")
                     s_wa = st.text_input("Nomor WhatsApp (Contoh: 6281234567890)", value="6281234567890")
-                    s_k = st.selectbox("Kelas / Program", ["General Speaking - A", "IELTS Prep - B", "Private Conversation", "Kids English"])
+                    s_k = st.selectbox("Kelas / Program", ["Reguler", "Publik"])
                     s_t = st.selectbox("Tipe Pembelajaran", ["Privat Rumah", "Tatap Muka", "Les Online"])
 
                     btn_add_siswa = st.form_submit_button("➕ Daftarkan Siswa")
