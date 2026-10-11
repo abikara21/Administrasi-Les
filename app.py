@@ -4,7 +4,12 @@ import numpy as np
 import datetime
 from PIL import Image
 import io
-import cv2
+try:
+    import cv2
+    HAS_OPENCV = True
+except ImportError:
+    HAS_OPENCV = False
+    cv2 = None
 
 # --- PAGE CONFIGURATION (MOBILE OPTIMIZED) ---
 st.set_page_config(
