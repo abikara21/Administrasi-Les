@@ -4,6 +4,7 @@ import numpy as np
 import datetime
 from PIL import Image
 import io
+import cv2
 
 # --- PAGE CONFIGURATION (MOBILE OPTIMIZED) ---
 st.set_page_config(
@@ -69,6 +70,33 @@ st.markdown("""
 PIN_ADMIN_DEFAULT = "rasiya21"
 PIN_GURU_DEFAULT = "3v@semok"
 
+
+# --- HELPER FUNCTION: FACE DETECTION (OPENCV) ---
+def detect_face_in_image(image_bytes):
+    if image_bytes is None:
+        return False, None, 0
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return True, image_bytes, 1
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+        
+        # Draw bounding boxes around detected faces
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 3)
+            
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+        buf = io.BytesIO()
+        pil_img.save(buf, format='JPEG')
+        return len(faces) > 0, buf.getvalue(), len(faces)
+    except Exception as e:
+        return True, image_bytes, 1
+
 # --- HELPER FUNCTION: EXCEL EXPORTER ---
 def generate_excel_recap(df_presensi, df_jurnal, df_nilai, df_siswa):
     output = io.BytesIO()
@@ -104,6 +132,12 @@ if 'admin_auth' not in st.session_state:
 if 'guru_auth' not in st.session_state:
     st.session_state['guru_auth'] = False
 
+if 'student_auth_id' not in st.session_state:
+    st.session_state['student_auth_id'] = None
+
+if 'student_auth_name' not in st.session_state:
+    st.session_state['student_auth_name'] = None
+
 # --- TOP MOBILE HEADER & ROLE SWITCHER ---
 st.markdown("<div class='main-title'>📱 Presensi & LMS English Class</div>", unsafe_allow_html=True)
 
@@ -121,75 +155,108 @@ st.markdown(f"<div class='role-badge'>Akses: {role}</div>", unsafe_allow_html=Tr
 # ==============================================================================
 if role == "👤 Mode Siswa / Murid":
     if not st.session_state['data_siswa'].empty:
-        siswa_login = st.selectbox("Login Sebagai Siswa:", st.session_state['data_siswa']['Nama'].tolist())
-        st.info(f"Welcome back, **{siswa_login}**! 👋")
+        if st.session_state['student_auth_id'] is None:
+            st.markdown("<div class='auth-card'>", unsafe_allow_html=True)
+            st.subheader("🔑 Masuk Area Siswa")
+            st.caption("Masukkan **Nomor WhatsApp** terdaftar (misal: 6281234567890) atau **ID Siswa** (misal: S01) untuk mengintip akun Anda.")
+            
+            with st.form("form_login_siswa"):
+                input_siswa = st.text_input("📱 Nomor WhatsApp / ID Siswa Terdaftar:", placeholder="Contoh: 6281234567890 atau S01")
+                btn_login_siswa = st.form_submit_button("🔓 Masuk Dashboard Saya")
+                
+                if btn_login_siswa:
+                    clean_input = input_siswa.strip()
+                    df_s = st.session_state['data_siswa']
+                    
+                    match = df_s[(df_s['ID'].astype(str).str.strip().str.lower() == clean_input.lower()) | 
+                                 (df_s['No WA'].astype(str).str.strip() == clean_input)]
+                    
+                    if not match.empty:
+                        matched_row = match.iloc[0]
+                        st.session_state['student_auth_id'] = matched_row['ID']
+                        st.session_state['student_auth_name'] = matched_row['Nama']
+                        st.success(f"✅ Selamat datang, {matched_row['Nama']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Nomor WhatsApp atau ID Siswa tidak terdaftar! Mohon cek kembali atau daftarkan diri via Form Pendaftaran Mandiri.")
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            siswa_login = st.session_state['student_auth_name']
+            
+            col_s_top, col_s_logout = st.columns([3, 1])
+            with col_s_top:
+                st.info(f"Welcome back, **{siswa_login}**! 👋")
+            with col_s_logout:
+                if st.button("🔒 Keluar"):
+                    st.session_state['student_auth_id'] = None
+                    st.session_state['student_auth_name'] = None
+                    st.rerun()
 
-        tab_s1, tab_s2, tab_s3, tab_s4 = st.tabs([
-            "📚 Modul Materi",
-            "🎙️ Pengumpulan Tugas",
-            "📊 Nilai Saya",
-            "📅 Riwayat Kehadiran"
-        ])
+            tab_s1, tab_s2, tab_s3, tab_s4 = st.tabs([
+                "📚 Modul Materi",
+                "🎙️ Pengumpulan Tugas",
+                "📊 Nilai Saya",
+                "📅 Riwayat Kehadiran"
+            ])
 
-        with tab_s1:
-            st.subheader("📚 Materi & Modul Pelajaran")
-            df_mat = st.session_state['materi_pelajaran']
-            if not df_mat.empty:
-                for _, m in df_mat.iterrows():
-                    with st.container():
-                        st.markdown(f"""
-                        <div class='mobile-card'>
-                            <b>{m['Kode Modul']} - {m['Judul']}</b><br/>
-                            <small>Kelas: {m['Kelas']} | Format: {m['Format']}</small><br/>
-                            <a href="{m['Link/Akses']}" target="_blank">🔗 Buka / Download Materi (Google Drive)</a>
-                        </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.info("ℹ️ Belum ada modul materi yang diunggah pengajar.")
+            with tab_s1:
+                st.subheader("📚 Materi & Modul Pelajaran")
+                df_mat = st.session_state['materi_pelajaran']
+                if not df_mat.empty:
+                    for _, m in df_mat.iterrows():
+                        with st.container():
+                            st.markdown(f"""
+                            <div class='mobile-card'>
+                                <b>{m['Kode Modul']} - {m['Judul']}</b><br/>
+                                <small>Kelas: {m['Kelas']} | Format: {m['Format']}</small><br/>
+                                <a href="{m['Link/Akses']}" target="_blank">🔗 Buka / Download Materi (Google Drive)</a>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("ℹ️ Belum ada modul materi yang diunggah pengajar.")
 
-        with tab_s2:
-            st.subheader("🎙️ Pengumpulan Tugas Voice / Speaking HP")
-            df_tug = st.session_state['daftar_penugasan']
-            if not df_tug.empty:
-                st.dataframe(df_tug[['Judul Tugas', 'Tenggat Waktu', 'Instruksi']], use_container_width=True)
+            with tab_s2:
+                st.subheader("🎙️ Pengumpulan Tugas Voice / Speaking HP")
+                df_tug = st.session_state['daftar_penugasan']
+                if not df_tug.empty:
+                    st.dataframe(df_tug[['Judul Tugas', 'Tenggat Waktu', 'Instruksi']], use_container_width=True)
 
-                with st.form("form_submit_tugas_siswa"):
-                    tugas_pilih = st.selectbox("Pilih Tugas yang Dikumpulkan", df_tug['Judul Tugas'].tolist())
-                    audio_file = st.file_uploader("Upload File Rekaman Suara / Tugas (MP3, WAV, M4A, PDF)", type=['mp3', 'wav', 'm4a', 'pdf'])
-                    catatan_siswa = st.text_area("Catatan Tambahan untuk Tutor")
+                    with st.form("form_submit_tugas_siswa"):
+                        tugas_pilih = st.selectbox("Pilih Tugas yang Dikumpulkan", df_tug['Judul Tugas'].tolist())
+                        audio_file = st.file_uploader("Upload File Rekaman Suara / Tugas (MP3, WAV, M4A, PDF)", type=['mp3', 'wav', 'm4a', 'pdf'])
+                        catatan_siswa = st.text_area("Catatan Tambahan untuk Tutor")
 
-                    btn_sub_tugas = st.form_submit_button("📤 Kirim Tugas Lengkap")
-                    if btn_sub_tugas:
-                        st.success(f"✅ Tugas '{tugas_pilih}' berhasil dikirim ke tutor!")
-            else:
-                st.info("ℹ️ Belum ada penugasan aktif.")
+                        btn_sub_tugas = st.form_submit_button("📤 Kirim Tugas Lengkap")
+                        if btn_sub_tugas:
+                            st.success(f"✅ Tugas '{tugas_pilih}' berhasil dikirim ke tutor!")
+                else:
+                    st.info("ℹ️ Belum ada penugasan aktif.")
 
-        with tab_s3:
-            st.subheader("📊 Transkrip & Laporan Nilai")
-            df_my_nilai = st.session_state['daftar_nilai'][st.session_state['daftar_nilai']['Nama'] == siswa_login]
-            if not df_my_nilai.empty:
-                row_n = df_my_nilai.iloc[0]
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    st.metric("Speaking Test", f"{row_n['Speaking Test']}")
-                    st.metric("Grammar & Vocab", f"{row_n['Grammar & Vocab']}")
-                with col_m2:
-                    st.metric("Listening Quiz", f"{row_n['Listening Quiz']}")
-                    st.metric("Nilai Akhir", f"{row_n['Nilai Akhir']:.2f}")
-            else:
-                st.info("Nilai belum diinput oleh pengajar.")
+            with tab_s3:
+                st.subheader("📊 Transkrip & Laporan Nilai")
+                df_my_nilai = st.session_state['daftar_nilai'][st.session_state['daftar_nilai']['Nama'] == siswa_login]
+                if not df_my_nilai.empty:
+                    row_n = df_my_nilai.iloc[0]
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
+                        st.metric("Speaking Test", f"{row_n['Speaking Test']}")
+                        st.metric("Grammar & Vocab", f"{row_n['Grammar & Vocab']}")
+                    with col_m2:
+                        st.metric("Listening Quiz", f"{row_n['Listening Quiz']}")
+                        st.metric("Nilai Akhir", f"{row_n['Nilai Akhir']:.2f}")
+                else:
+                    st.info("Nilai belum diinput oleh pengajar.")
 
-        with tab_s4:
-            st.subheader("📅 Riwayat Kehadiran Anda")
-            my_pres = [p for p in st.session_state['data_presensi'] if p['Nama'] == siswa_login]
-            if my_pres:
-                df_my_p = pd.DataFrame(my_pres)
-                st.dataframe(df_my_p[['Tanggal', 'Modus', 'Status Kehadiran', 'Lokasi/GPS', 'Catatan']], use_container_width=True)
-            else:
-                st.info("Belum ada catatan presensi.")
+            with tab_s4:
+                st.subheader("📅 Riwayat Kehadiran Anda")
+                my_pres = [p for p in st.session_state['data_presensi'] if p['Nama'] == siswa_login]
+                if my_pres:
+                    df_my_p = pd.DataFrame(my_pres)
+                    st.dataframe(df_my_p[['Tanggal', 'Modus', 'Status Kehadiran', 'Lokasi/GPS', 'Catatan']], use_container_width=True)
+                else:
+                    st.info("Belum ada catatan presensi.")
     else:
         st.warning("⚠️ Belum ada siswa terdaftar di sistem. Silakan mendaftar via 'Form Pendaftaran Mandiri'.")
-
 
 # ==============================================================================
 # MODE 2: FORM PENDAFTARAN MANDIRI (PUBLIC - TIDAK PERLU PIN)
